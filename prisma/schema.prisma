@@ -1,0 +1,1074 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+generator kysely {
+  provider = "prisma-kysely"
+  output   = "../src/kysely"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum VoteType {
+  SUPPORT
+  OPPOSE
+  NEUTRAL
+}
+
+enum ClusteringErrorTypeEnum {
+  SUMMARY_JSON_FORMATTING
+  ATTACHMENT_FAILURE
+  OTHERS
+}
+
+enum PlaceSourceEnum {
+  ENTITIES
+  MEDIA_NAME
+  DEFAULT_TAIWAN_IF_LOCAL
+}
+
+enum NotificationType {
+  RECOMMENDATION
+  COMMENT_REPLY
+  MISINFORMATION_ALERT
+  COMMENT_LIKED
+  COMMENT_DISLIKED
+  CROSS_ARTICLES_ANALYSIS
+  OTHER
+}
+
+enum CommentType {
+  COMMENT
+  REPLY_TO_COMMENT
+  REPLY_TO_REPLY
+}
+
+enum QuestionType {
+  TRUE_FALSE_NOT_GIVEN_QUESTION
+  MISGUIDING_TECHNIQUES_QUESTION
+}
+
+model Notification {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String           @db.Uuid // recipient
+  senderId  String?          @db.Uuid // sender (nullable for system notifications)
+  type      NotificationType
+  createdAt Int
+  isRead    Boolean          @default(false)
+
+  title    String? // e.g. "網友回應"
+  content  String? // e.g. "@obnovoid 按讚了你的留言"
+  imageUrl String? // optional media/thumbnail/author avatar
+
+  // Optional links to related entities
+  newsId          String? @db.Uuid
+  commentId       String? @db.Uuid
+  clusterId       String? @db.Uuid
+  crossAnalysisId String? @db.Uuid
+
+  // Relations
+  user           User           @relation("NotificationRecipient", fields: [userId], references: [id])
+  sender         User?          @relation("NotificationSender", fields: [senderId], references: [id])
+  news           News?          @relation(fields: [newsId], references: [id])
+  comment        Comment?       @relation(fields: [commentId], references: [id])
+  cluster        Cluster?       @relation(fields: [clusterId], references: [id])
+  cross_analysis CrossAnalysis? @relation(fields: [crossAnalysisId], references: [id])
+
+  @@index([userId])
+  @@index([senderId])
+  @@index([type])
+  @@map("notification")
+}
+
+model FreeUserToUnlockedCluster {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cluster   Cluster @relation(fields: [clusterId], references: [id])
+  clusterId String  @db.Uuid
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String  @db.Uuid
+
+  @@map("free_user_to_unlocked_cluster")
+}
+
+model Cluster {
+  id                    String                 @id @db.Uuid
+  cluster_name          String?
+  cluster_summary       String?
+  cluster_question      String?
+  centroid_embedding    Unsupported("vector")?
+  top_entities          Json? // e.g. [{"text": "Elon Musk", "label": "PERSON"}, ...]
+  processed_at          Int?
+  latest_published      Int?
+  article_count         Int?
+  // Topics
+  main_topic            String?
+  main_topic_score      Float?
+  secondary_topic       String?
+  secondary_topic_score Float?
+
+  // New: ambiguity + candidates
+  ambiguous        Boolean @default(false)
+  // New: ranked candidates like [{label, score, rank}]
+  // On PostgreSQL, Prisma's Json maps to JSONB by default.
+  topic_candidates Json?
+
+  // Places of interest
+  places_in_concern InterestingRegionOrCountry[] // e.g. ["台北市", "日本"]
+  places_in_detail  Json?
+
+  clusteringJob     ClusteringJob @relation(fields: [clustering_job_id], references: [id])
+  clustering_job_id Int
+
+  news                      News[]
+  votes                     ClusterVote[]
+  voteSummary               ClusterVoteSummary?
+  comments                  Comment[]
+  notifications             Notification[]
+  userAnswers               UserAnswer[]
+  freeUserToUnlockedCluster FreeUserToUnlockedCluster[]
+
+  @@map("cluster")
+}
+
+model ClusteringFailure {
+  id           Int                     @id @default(autoincrement())
+  failure_type ClusteringErrorTypeEnum
+  detail       String?
+  timestamp    Int
+  resolved     Boolean                 @default(false)
+
+  jobId Int?
+  job   ClusteringJob? @relation(fields: [jobId], references: [id])
+
+  @@map("clustering_failures")
+}
+
+model ClusteringJob {
+  id                Int     @id @default(autoincrement())
+  visualisation_url String?
+  start_time        Int
+  end_time          Int?
+
+  failures ClusteringFailure[]
+
+  cluster Cluster[]
+
+  @@map("clustering_jobs")
+}
+
+model ClusterVote {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  clusterId String   @db.Uuid
+  vote      VoteType
+  votedAt   Int // Unix timestamp
+
+  user    User    @relation(fields: [userId], references: [id])
+  cluster Cluster @relation(fields: [clusterId], references: [id])
+
+  @@unique([userId, clusterId]) // Prevent multiple votes per user per news
+  @@index([clusterId])
+  @@index([userId])
+  @@map("cluster_vote")
+}
+
+model ClusterVoteSummary {
+  clusterId String @id @db.Uuid
+  support   Int    @default(0)
+  oppose    Int    @default(0)
+  neutral   Int    @default(0)
+  updatedAt Int // Unix timestamp
+
+  cluster Cluster @relation(fields: [clusterId], references: [id])
+
+  @@map("cluster_vote_summary")
+}
+
+model CrossAnalysis {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  articleA   News   @relation("ArticleA", fields: [articleAId], references: [id])
+  articleAId String @db.Uuid
+
+  articleB   News   @relation("ArticleB", fields: [articleBId], references: [id])
+  articleBId String @db.Uuid
+
+  analysisResult String // Markdown content
+  requestedAt    Int
+  url            String
+
+  requestedBy   User?   @relation("RequestedAnalyses", fields: [requestedById], references: [id])
+  requestedById String? @db.Uuid
+
+  notifications Notification[]
+
+  @@map("cross_analysis")
+}
+
+model NewsReaction {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @db.Uuid
+
+  news   News   @relation(fields: [newsId], references: [id])
+  newsId String @db.Uuid
+
+  type      ReactionType
+  createdAt Int
+
+  @@map("news_reaction")
+}
+
+model News {
+  media_name      MediaNameEnum?
+  url             String?                @unique
+  title           String?
+  origin          OriginEnum?
+  content         String?
+  published_at    Int?
+  authors         String[]
+  images          String[]
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  embedding       Unsupported("vector")?
+  cluster         Cluster?               @relation(fields: [clusterId], references: [id])
+  clusterId       String?                @db.Uuid
+  authorships     NewsAuthor[]
+  num_of_likes    Int                    @default(0)
+  num_of_dislikes Int                    @default(0)
+
+  userArticleReads UserArticleRead[]
+
+  places_in_concern InterestingRegionOrCountry[] // e.g. ["台北市", "日本"]
+  places_in_detail  Json?
+
+  copypaste_flag Boolean @default(false)
+
+  //tagging
+  clickbait             Json?  // {"confidence":number, "explanation":string, "refined_title":string}
+  journalistic_merits   Json? // map of { tag: { "description":string, "degree": low/medium/high } }
+  journalistic_demerits Json? // map of { tag: { "description":string, "degree": low/medium/high } }
+  reporting_style       String[] @default([]) // list of styles used
+  reporting_intention   String[] @default([]) // list of intentions
+  refined_title         String?
+
+  crossAnalysesA CrossAnalysis[] @relation("ArticleA")
+  crossAnalysesB CrossAnalysis[] @relation("ArticleB")
+  notifications  Notification[]
+  newsReactions  NewsReaction[]
+  questions      NewsQuestion[]
+
+  @@index([id])
+  @@map("news")
+}
+
+model UserAnswer {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @db.Uuid
+
+  question   NewsQuestion @relation(fields: [questionId], references: [id])
+  questionId String       @db.Uuid
+
+  cluster   Cluster @relation(fields: [clusterId], references: [id])
+  clusterId String  @db.Uuid
+
+  selectedOption String
+  answeredAt     Int
+
+  @@unique([userId, questionId]) // Ensure one answer per user per question
+  @@map("user_answer")
+}
+
+model NewsQuestion {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  question    String
+  options     Json // Store A/B/C/D options as a JSON object
+  answer      String // Correct option key, e.g., "C"
+  explanation String?
+  news        News         @relation(fields: [newsId], references: [id])
+  newsId      String       @db.Uuid
+  type        QuestionType @default(TRUE_FALSE_NOT_GIVEN_QUESTION)
+  UserAnswer  UserAnswer[]
+
+  @@map("news_questions")
+}
+
+model NewsMedia {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  chinese_name       String?
+  imageUrl           String
+  political_standing Float?
+  AuthorToNewsMedia  AuthorToNewsMedia[]
+
+  comments Comment[] @relation("NewsMediaComments")
+
+  @@unique([name])
+  @@map("news_media")
+}
+
+model AuthorToNewsMedia {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId    String    @db.Uuid
+  newsMediaId String    @db.Uuid
+  author      Author    @relation(fields: [authorId], references: [id])
+  newsMedia   NewsMedia @relation(fields: [newsMediaId], references: [id])
+
+  @@map("author_to_news_media")
+}
+
+model Author {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  AuthorToNewsMedia AuthorToNewsMedia[]
+  authorships       NewsAuthor[]
+  userToAuthor      UserToAuthor[]
+
+  @@map("author")
+}
+
+model UserToAuthor {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String @db.Uuid
+  authorId   String @db.Uuid
+  followedAt Int?
+
+  user   User   @relation(fields: [userId], references: [id])
+  author Author @relation(fields: [authorId], references: [id])
+
+  @@unique([userId, authorId]) // Prevent duplicate follows
+  @@map("user_to_author")
+}
+
+model NewsAuthor {
+  newsId   String @db.Uuid
+  authorId String @db.Uuid
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author   Author @relation(fields: [authorId], references: [id])
+  News     News   @relation(fields: [newsId], references: [id])
+
+  @@map("news_author")
+}
+
+model UserArticleRead {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  newsId String @db.Uuid
+  news   News   @relation(fields: [newsId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("user_article_read")
+}
+
+model UserActivity {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @db.Uuid
+  type      ActivityType
+  createdAt Int
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@index([userId, type])
+  @@map("user_activity")
+}
+
+model UserActivityCounter {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @db.Uuid
+  type      ActivityType
+  count     Int          @default(0)
+  updatedAt Int
+  createdAt Int
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@map("user_activity_counter")
+}
+
+model Mission {
+  id           Int           @id @default(autoincrement())
+  title        String        @unique
+  type         MissionType
+  reward       Int           @default(0)
+  requirement  Int           @default(1)
+  userMissions UserMission[]
+
+  @@map("mission")
+}
+
+model UserMission {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String  @db.Uuid
+  missionId Int
+  progress  Int     @default(0)
+  // used for one-off missions
+  completed Boolean @default(false)
+  updatedAt Int
+  createdAt Int
+  mission   Mission @relation(fields: [missionId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, missionId])
+  @@map("user_mission")
+}
+
+model Title {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  explanation       String
+  emoji             String
+  condition         String
+  userTitles        UserTitle[]
+  userTitleProgress UserTitleProgress[]
+
+  @@map("title")
+}
+
+model UserTitle {
+  id        Int    @id @default(autoincrement())
+  userId    String @db.Uuid
+  titleId   Int
+  createdAt Int
+  title     Title  @relation(fields: [titleId], references: [id])
+  user      User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, titleId])
+  @@map("user_title")
+}
+
+model UserTitleProgress {
+  id        Int     @id @default(autoincrement())
+  userId    String  @db.Uuid
+  titleId   Int
+  progress  Int     @default(0)
+  updatedAt Int
+  createdAt Int
+  completed Boolean @default(false)
+  Title     Title   @relation(fields: [titleId], references: [id])
+  User      User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, titleId])
+}
+
+model Achievement {
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  unknown          Int               @default(0)
+  bronze           Int               @default(1)
+  silver           Int
+  gold             Int
+  platinum         Int
+  diamond          Int
+  userAchievements UserAchievement[]
+
+  @@map("achievement")
+}
+
+model UserAchievement {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String      @db.Uuid
+  achievementId  Int
+  cumulative_num Int         @default(0)
+  max_num        Int         @default(0)
+  updatedAt      Int?
+  achievement    Achievement @relation(fields: [achievementId], references: [id])
+  user           User        @relation(fields: [userId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@map("user_achievement")
+}
+
+model Comment {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String      @db.Uuid
+  clusterId         String      @db.Uuid
+  text              String
+  likeNum           Int         @default(0)
+  dislikeNum        Int         @default(0)
+  createdAt         Int
+  taggedNewsMediaId String?     @db.Uuid
+  replyCount        Int         @default(0)
+  parentId          String?     @db.Uuid
+  replyTo           String?     @db.Uuid
+  type              CommentType @default(COMMENT)
+
+  user          User              @relation(fields: [userId], references: [id])
+  cluster       Cluster           @relation(fields: [clusterId], references: [id])
+  parent        Comment?          @relation("CommentReplies", fields: [parentId], references: [id])
+  replies       Comment[]         @relation("CommentReplies")
+  reactions     CommentReaction[]
+  notifications Notification[]
+
+  taggedNewsMedia NewsMedia? @relation("NewsMediaComments", fields: [taggedNewsMediaId], references: [id])
+
+  @@map("comment")
+}
+
+model User {
+  id                        String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName               String?
+  avatarUrl                 String?
+  isBlocked                 Boolean                      @default(false)
+  onboardingNeeded          Boolean                      @default(true)
+  role                      Role                         @default(FREE_USER)
+  createdAt                 Int
+  updatedAt                 Int
+  num_of_brains             Int                          @default(0)
+  num_of_hearts             Int                          @default(0)
+  topicsInterestedIn        InterestingTopic[]
+  regionsInterestedIn       InterestingRegionOrCountry[]
+  politicalStance           PoliticalStance?
+  identity                  Identity?
+  userAchievement           UserAchievement[]
+  userActivity              UserActivity[]
+  userActivityCounter       UserActivityCounter[]
+  appSettings               UserAppSettingPreference?
+  userArticleReads          UserArticleRead[]
+  auth                      UserAuth?
+  missions                  UserMission[]
+  userTitle                 UserTitle[]
+  clusterVotes              ClusterVote[]
+  comment                   Comment[]
+  commentReactions          CommentReaction[]
+  crossAnalysesRequested    CrossAnalysis[]              @relation("RequestedAnalyses")
+  notificationsReceived     Notification[]               @relation("NotificationRecipient")
+  notificationsSent         Notification[]               @relation("NotificationSender")
+  newsReactions             NewsReaction[]
+  userAnswers               UserAnswer[]
+  freeUserToUnlockedCluster FreeUserToUnlockedCluster[]
+  userToAuthor              UserToAuthor[]
+  userTitleProgress         UserTitleProgress[]
+
+  @@map("user")
+}
+
+model CommentReaction {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @db.Uuid
+  commentId String       @db.Uuid
+  type      ReactionType
+  createdAt Int
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId]) // prevents both like and dislike simultaneously
+  @@index([commentId, type])
+  @@index([userId, type])
+  @@map("comment_reaction")
+}
+
+model UserAuth {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String       @unique @db.Uuid
+  authProvider      AuthProvider @default(EMAIL)
+  email             String?      @unique
+  password          String?
+  providerId        String?
+  refreshToken      String?
+  verificationToken String?
+  emailVerified     Boolean      @default(false)
+  user              User         @relation(fields: [userId], references: [id])
+
+  @@map("user_auth")
+}
+
+model UserAppSettingPreference {
+  id                         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                     String  @unique @db.Uuid
+  gameMode                   Boolean @default(true)
+  canSendNotification        Boolean @default(false)
+  seeReportingMerits         Boolean @default(false)
+  seeMisguidingTechniques    Boolean @default(false)
+  seeReportingStyle          Boolean @default(false)
+  seeReportingIntention      Boolean @default(false)
+  removeSensationalHeadlines Boolean @default(false)
+  removeCopyPasteArticles    Boolean @default(false)
+  pushNotificationToken      String?
+  user                       User    @relation(fields: [userId], references: [id])
+
+  @@map("user_app_setting_preference")
+}
+
+model ScrapeFailure {
+  id           Int           @id @default(autoincrement())
+  failure_type ErrorTypeEnum
+  media_name   String?
+  timestamp    Int
+  resolved     Boolean       @default(false)
+  url          String[]
+  detail       String?
+  jobId        Int?
+  job          ScrapeJob?    @relation(fields: [jobId], references: [id])
+
+  @@map("scrape_failures")
+}
+
+model ScrapeJob {
+  id         Int             @id @default(autoincrement())
+  machine_id String
+  start_time Int
+  end_time   Int?
+  media_name MediaNameEnum
+  failures   ScrapeFailure[]
+
+  @@map("scrape_jobs")
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  ONLINE
+  OFFLINE
+  SUBSCRIBE
+  CHANGE_PROFILE_PIC
+  CHANGE_PROFILE_NAME
+  CHANGE_TOPICS_INTERESTED_IN
+  CHANGE_REGIONS_INTERESTED_IN
+  CHANGE_IDENTITY
+  CHANGE_POLITICAL_STANCE
+  COMMENT
+  REPLY
+  LIKE_NEWS
+  LIKE_COMMENT
+  DISLIKE_NEWS
+  DISLIKE_COMMENT
+  COMMUNITY_VOTE
+  ANSWER_TRUTH_QUESTIONS_CORRECTLY
+  ANSWER_TRUTH_QUESTIONS_WRONG
+  ANSWER_NEWS_MISGUIDANCE_QUESTIONS_CORRECTLY
+  ANSWER_NEWS_MISGUIDANCE_QUESTIONS_WRONG
+  USE_CROSS_NEWS_ARTICLE_ANALYSIS_FUNCTION
+  REEXAMINE_MISINFORMATION
+  FOLLOW_JOURNALIST
+  UNFOLLOW_JOURNALIST
+  CLAIM_REWARD
+  READ_AI_LABEL_REPORT
+  USE_BRAINS
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum Role {
+  OWNER
+  FREE_USER
+  PAID_USER
+  BETA_TESTER
+}
+
+enum ErrorTypeEnum {
+  LLM_ERROR
+  UNMAPPED_MEDIA
+  PARSING_FAILURE
+  PARSING_ERROR
+  ZERO_URLS_FETCHED
+  DATABASE_TIMEOUT
+  OTHERS
+}
+
+enum InterestingTopic {
+  政治
+  國際
+  財經
+  科技
+  教育
+  社會
+  文化
+  環境
+  娛樂
+  健康
+  軍隊
+  運動
+  觀點
+  天氣
+  交通
+  公共衞生
+  災害
+}
+
+enum InterestingRegionOrCountry {
+  台北市
+  新北市
+  桃園市
+  台中市
+  台南市
+  高雄市
+  基隆市
+  新竹市
+  嘉義市
+  宜蘭縣
+  花蓮縣
+  台東縣
+  南投縣
+  彰化縣
+  雲林縣
+  屏東縣
+  苗栗縣
+  新竹縣
+  嘉義縣
+  澎湖縣
+  金門縣
+  連江縣
+  香港
+  中國
+  美國
+  加沙
+  以色列
+  烏克蘭
+  歐盟
+  日本
+  韓國
+  台灣 // NEW: default fallback for domestic
+
+  // 港澳
+  澳門
+
+  // 歐洲（西歐、北歐、南歐、中東歐、巴爾幹）
+  英國
+  法國
+  德國
+  義大利
+  西班牙
+  葡萄牙
+  荷蘭
+  比利時
+  盧森堡
+  瑞士
+  奧地利
+  愛爾蘭
+  丹麥
+  瑞典
+  挪威
+  芬蘭
+  冰島
+  波蘭
+  捷克
+  匈牙利
+  斯洛伐克
+  斯洛維尼亞
+  克羅埃西亞
+  羅馬尼亞
+  保加利亞
+  希臘
+  愛沙尼亞
+  拉脫維亞
+  立陶宛
+  白俄羅斯
+  摩爾多瓦
+  馬爾他
+  賽普勒斯
+  塞爾維亞
+  波士尼亞與赫塞哥維納
+  蒙特內哥羅
+  北馬其頓
+  阿爾巴尼亞
+  科索沃
+  俄羅斯
+
+  // 北美、大洋洲
+  加拿大
+  澳大利亞
+  紐西蘭
+
+  // 東北亞、東南亞、南亞、中亞
+  北韓
+  蒙古
+  新加坡
+  馬來西亞
+  印尼
+  泰國
+  越南
+  菲律賓
+  柬埔寨
+  寮國
+  汶萊
+  東帝汶
+  印度
+  巴基斯坦
+  孟加拉
+  斯里蘭卡
+  尼泊爾
+  不丹
+  馬爾地夫
+  哈薩克
+  烏茲別克
+  吉爾吉斯
+  土庫曼
+  塔吉克
+
+  // 中東與北非（含以巴周邊）
+  土耳其
+  伊朗
+  伊拉克
+  敘利亞
+  黎巴嫩
+  約旦
+  埃及
+  沙烏地阿拉伯
+  阿拉伯聯合大公國
+  卡達
+  科威特
+  巴林
+  阿曼
+  也門
+  巴勒斯坦
+  約旦河西岸
+
+  // 拉丁美洲與加勒比
+  墨西哥
+  巴西
+  阿根廷
+  智利
+  秘魯
+  哥倫比亞
+  委內瑞拉
+  厄瓜多
+  玻利維亞
+  烏拉圭
+  巴拉圭
+  古巴
+  多明尼加
+  海地
+  瓜地馬拉
+  薩爾瓦多
+  宏都拉斯
+  尼加拉瓜
+  哥斯大黎加
+  巴拿馬
+  牙買加
+  巴貝多
+  千里達及托巴哥
+  巴哈馬
+
+  // 非洲
+  南非
+  奈及利亞
+  衣索比亞
+  肯亞
+  坦尚尼亞
+  烏干達
+  盧安達
+  迦納
+  象牙海岸
+  塞內加爾
+  喀麥隆
+  摩洛哥
+  阿爾及利亞
+  突尼西亞
+  利比亞
+  蘇丹
+  南蘇丹
+  索馬利亞
+  安哥拉
+  納米比亞
+  波札那
+  尚比亞
+  辛巴威
+  剛果民主共和國
+  剛果共和國
+  馬達加斯加
+  模里西斯
+
+  // 大洋洲與太平洋島國
+  帛琉
+  所羅門群島
+  馬紹爾群島
+  吐瓦魯
+  諾魯
+  吉里巴斯
+  密克羅尼西亞聯邦
+  巴布亞紐幾內亞
+  斐濟
+  薩摩亞
+  東加
+  萬那杜
+
+  國際 // NEW: optional fallback for global/uncertain
+}
+
+enum Identity {
+  台北人
+  新北人
+  桃園人
+  台中人
+  台南人
+  高雄人
+  基隆人
+  新竹人
+  嘉義人
+  宜蘭人
+  花蓮人
+  台東人
+  南投人
+  彰化人
+  雲林人
+  屏東人
+  苗栗人
+  澎湖人
+  金門人
+  連江人
+  其他
+}
+
+enum PoliticalStance {
+  深綠
+  淺綠
+  中立
+  淺藍
+  深藍
+}
+
+enum MediaNameEnum {
+  CTS
+  TSSDNews
+  CTWant
+  TaiwanNews
+  TTV
+  CTINews
+  HongKongFreePress
+  MingPaoNews
+  SingTaoDaily
+  SCMP
+  ChineseNewYorkTimes
+  DeutscheWelle
+  HKFreePress
+  WenWeiPo
+  OrientalDailyNews
+  TaKungPao
+  HK01
+  InitiumMedia
+  YahooNews
+  HKCD
+  TheEpochTimes
+  NowTV
+  ChineseBBC
+  VOC
+  HKCourtNews
+  ICable
+  HKGovernmentNews
+  OrangeNews
+  TheStandard
+  HKEJ
+  HKET
+  RTHK
+  TheWitness
+  InMediaHK
+  PeopleDaily
+  XinhuaNewsAgency
+  GlobalTimes
+  CCTV
+  UnitedDailyNews
+  LibertyTimesNet
+  ChinaTimes
+  CNA
+  PTSNews
+  CTEE
+  MyPeopleVol
+  TaiwanTimes
+  ChinaDailyNews
+  SETN
+  NextAppleNews
+  MirrorMedia
+  NowNews
+  StormMedia
+  TVBS
+  EBCNews
+  ETtoday
+  NewTalk
+  FTV
+  MyGoPenNews
+  TFCNews
+  FactcheckLab
+}
+
+enum OriginEnum {
+  native
+  CTS
+  TSSDNews
+  CTWant
+  TaiwanNews
+  TTV
+  CTINews
+  HongKongFreePress
+  MingPaoNews
+  SingTaoDaily
+  SCMP
+  ChineseNewYorkTimes
+  DeutscheWelle
+  HKFreePress
+  WenWeiPo
+  OrientalDailyNews
+  TaKungPao
+  HK01
+  InitiumMedia
+  YahooNews
+  HKCD
+  TheEpochTimes
+  NowTV
+  ChineseBBC
+  VOC
+  HKCourtNews
+  ICable
+  HKGovernmentNews
+  OrangeNews
+  TheStandard
+  HKEJ
+  HKET
+  RTHK
+  TheWitness
+  InMediaHK
+  PeopleDaily
+  XinhuaNewsAgency
+  GlobalTimes
+  CCTV
+  UnitedDailyNews
+  LibertyTimesNet
+  ChinaTimes
+  CNA
+  PTSNews
+  CTEE
+  MyPeopleVol
+  TaiwanTimes
+  ChinaDailyNews
+  SETN
+  NextAppleNews
+  MirrorMedia
+  NowNews
+  StormMedia
+  TVBS
+  EBCNews
+  ETtoday
+  NewTalk
+  FTV
+  MyGoPenNews
+  TFCNews
+  FactcheckLab
+}
+
+enum MissionType {
+  DAILY
+  ONE_TIME
+  INFINITE
+}
+
+enum EntityLabelEnum {
+  PERSON
+  ORG
+  GPE
+  LOC
+  // Add more if needed (e.g., EVENT, PRODUCT, etc.)
+}
