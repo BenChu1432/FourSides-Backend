@@ -5,6 +5,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { GmailModule } from '../gmail/gmail.module';
 import { JwtModule } from '@nestjs/jwt';
 import { KyselyModule } from 'src/kysely/kysely.module';
+import { GameModule } from 'src/game/game.module';
+import { GameService } from 'src/game/game.service';
+import { S3Service } from 'src/s3/s3.service';
 
 @Module({
   imports: [
@@ -15,7 +18,7 @@ import { KyselyModule } from 'src/kysely/kysely.module';
     KyselyModule,
     GmailModule,
   ],
-  providers: [UserService],
+  providers: [UserService, GameService, S3Service],
   controllers: [UserController],
 })
 export class UserModule {}

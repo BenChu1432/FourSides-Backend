@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -44,6 +45,21 @@ export class NewsController {
     private readonly gameService: GameService,
     private readonly notificationService: NotificationService,
   ) {}
+
+  @UseGuards(AuthGuard)
+  @Get('get-clusters/latest-news')
+  // @UseInterceptors(TrimGetClustersResponseInterceptor)
+  async getLatestClusters(
+    @Query('offset') offset: number = 0,
+    @Req() req: Request,
+  ) {
+    const payload: TokenPayload = req['user'];
+
+    return await this.newsService.getLatestClusters({
+      userId: payload.userId,
+      offset: Number(offset),
+    });
+  }
 
   @UseGuards(AuthGuard)
   @Get('get-clusters/personalised-news')
@@ -126,7 +142,15 @@ export class NewsController {
           userId: payload.userId,
           achievementId: 4,
         });
-      return { achievementUnlocked: achievementUnlocked, correct: result };
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'NEWS_VOTE_TOTAL',
+      });
+      return {
+        achievementUnlocked: achievementUnlocked,
+        correct: result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
     }
 
     return { achievementUnlocked: false, correct: result };
@@ -165,10 +189,24 @@ export class NewsController {
   async search(@Req() req: Request, @Body() dto: SearchDto) {
     const payload: TokenPayload = req['user'];
 
-    return await this.newsService.search({
+    const result = await this.newsService.search({
       input: dto.input,
       userId: payload.userId,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'SEARCH_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -216,7 +254,14 @@ export class NewsController {
           userId: userId,
           achievementId: 7,
         });
-      return { achievementUnlocked: achievementUnlocked };
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'AI_ANALYSIS_TOTAL',
+      });
+      return {
+        achievementUnlocked,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
     }
 
     const sqs = new SQSClient({ region: 'ap-northeast-1' }); // or use process.env.AWS_REGION
@@ -239,6 +284,10 @@ export class NewsController {
         userId: userId,
         achievementId: 7,
       });
+    const unlockedTitle = await this.gameService.updateTitleProgress({
+      userId: payload.userId,
+      type: 'AI_ANALYSIS_TOTAL',
+    });
 
     await sqs.send(
       new SendMessageCommand({
@@ -247,7 +296,10 @@ export class NewsController {
       }),
     );
 
-    return achievementUnlocked;
+    return {
+      unlockedAchievements: achievementUnlocked ? [achievementUnlocked] : [],
+      unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+    };
   }
 
   @UseGuards(AuthGuard)
@@ -269,10 +321,12 @@ export class NewsController {
     @Query('offset') offset: number = 0,
   ) {
     const payload: TokenPayload = req['user'];
-    return await this.newsService.getCrossAnalysisReports({
+    const result = await this.newsService.getCrossAnalysisReports({
       userId: payload.userId,
       offset: Number(offset),
     });
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -289,6 +343,15 @@ export class NewsController {
         userId: payload.userId,
         missionTitle: '👍🏻 讚好新聞',
       });
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'NEWS_LIKE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
     }
 
     return result;
@@ -308,6 +371,15 @@ export class NewsController {
         userId: payload.userId,
         missionTitle: '👎🏻 踢新聞',
       });
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'NEWS_DISLIKE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
     }
     return result;
   }
@@ -335,10 +407,21 @@ export class NewsController {
       authorId: dto.authorId,
     });
 
-    await this.gameService.updateOneOffMissionProgress({
-      userId: payload.userId,
-      missionTitle: '🧍‍♂️ 跟蹤記者',
-    });
+    if (followStatus.followed === true) {
+      await this.gameService.updateOneOffMissionProgress({
+        userId: payload.userId,
+        missionTitle: '🧍‍♂️ 跟蹤記者',
+      });
+
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'JOURNALIST_FOLLOW_TOTAL',
+      });
+      return {
+        ...followStatus,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
 
     return followStatus;
   }
@@ -378,5 +461,14 @@ export class NewsController {
         offset: dto.offset,
       },
     );
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/abandon-draft')
+  async updateAbandonDraft(@Req() req: Request) {
+    const payload: TokenPayload = req['user'];
+    return await this.gameService.updateAbandonDraft({
+      userId: payload.userId,
+    });
   }
 }

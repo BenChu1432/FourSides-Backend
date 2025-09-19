@@ -10,12 +10,14 @@ import timeUtil from 'utils/timeUtil';
 import { sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { NotificationService } from 'src/notification/notification.service';
+import { GameService } from 'src/game/game.service';
 
 @Injectable()
 export class ForumService {
   constructor(
     private readonly kyselyService: KyselyService,
     private readonly notificationService: NotificationService,
+    private readonly gameService: GameService,
   ) {}
   private get db() {
     return this.kyselyService.connection;
@@ -364,8 +366,12 @@ export class ForumService {
             commentId: likedComment.id,
           });
         }
+        const unlockedTitle = await this.gameService.updateTitleProgress({
+          userId: likedComment?.userId ?? '',
+          type: 'COMMENT_DISLIKE_TOTAL',
+        });
 
-        return { status: 'liked', changed: true };
+        return { status: 'liked', changed: true, unlockedTitle };
       }
 
       if (existing.type === 'LIKE') {
@@ -478,7 +484,15 @@ export class ForumService {
             commentId: dislikedComment.id,
           });
         }
-        return { status: 'disliked', changed: true };
+        const unlockedTitle = await this.gameService.updateTitleProgress({
+          userId: dislikedComment?.userId ?? '',
+          type: 'COMMENT_DISLIKE_TOTAL',
+        });
+        return {
+          status: 'disliked',
+          changed: true,
+          unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+        };
       }
 
       if (existing.type === 'DISLIKE') {

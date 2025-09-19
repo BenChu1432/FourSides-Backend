@@ -20,6 +20,21 @@ function _toTaipeiYMD(unixSec: number) {
   };
 }
 
+// Determines if a given timestamp (in seconds or milliseconds) is between 1 AM and 5 AM Taipei time.
+function isBetweenTaipei1And5AM(time: number): boolean {
+  // Normalize to seconds if input is in milliseconds
+  const isMilliseconds = time > 1_000_000_000_000; // ~1e12
+  const timeSec = isMilliseconds ? Math.floor(time / 1000) : time;
+
+  // Shift to Taipei time by adding the UTC+8 offset (in ms)
+  const taipeiMs = timeSec * SEC + TAIPEI_OFFSET_MS;
+  const taipeiDate = new Date(taipeiMs);
+
+  const hour = taipeiDate.getUTCHours(); // Get hour in Taipei time
+
+  return hour >= 1 && hour < 5;
+}
+
 // Start of day 00:00:00 in Taipei for the given Y-M-D, returned in UNIX seconds (UTC)
 function _taipeiStartOfDayUnix(y: number, m: number, d: number): number {
   const utcMsAtTaipeiMidnight = Date.UTC(y, m, d) - TAIPEI_OFFSET_MS;
@@ -121,4 +136,5 @@ export default {
   isNewDayAfterFinishedAt,
   getStartOfTodayUnix,
   isDaySkipped,
+  isBetweenTaipei1And5AM,
 };

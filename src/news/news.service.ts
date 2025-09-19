@@ -21,6 +21,27 @@ export class NewsService {
   private get db() {
     return this.kyselyService.connection;
   }
+  async getLatestClusters({
+    userId,
+    offset,
+  }: {
+    userId: string;
+    offset: number;
+  }) {
+    console.log('offset:', offset);
+    const sub = getClusters(this.db, userId).as('c');
+
+    // Aliases are now real columns on subquery "c"
+    return await this.db
+      .selectFrom(sub)
+      .selectAll()
+      .where('id', 'is not', null)
+      .orderBy('latest_published', 'desc')
+      .limit(30)
+      .offset(offset)
+      .execute();
+  }
+
   async getPopularClusters({
     userId,
     offset,
@@ -58,6 +79,7 @@ export class NewsService {
     offset: number;
   }) {
     function buildTopicsClause(topics: string[]) {
+      console.log('topics:', topics);
       if (!topics?.length) return sql<boolean>`false`;
       return sql<boolean>`
     cluster.main_topic = ANY(CAST(${sql`${topics}`} AS text[]))
@@ -95,7 +117,7 @@ export class NewsService {
     return await getClusters(this.db, userId)
       .where((eb) =>
         eb.and([
-          eb.or([topicsClause, regionsClause]),
+          eb.and([topicsClause, regionsClause]),
           eb('cluster.id', 'is not', null),
         ]),
       )
@@ -142,8 +164,8 @@ export class NewsService {
           eb.or([eb(ratioGreen, '>=', 0.7), eb(ratioBlue, '>=', 0.7)]),
         ]),
       )
-      .orderBy(sql`"news_count"`, 'desc')
       .orderBy('cluster.latest_published', 'desc')
+      .orderBy(sql`"news_count"`, 'desc')
       .offset(offset)
       .limit(30)
       .execute();
@@ -173,6 +195,7 @@ export class NewsService {
         'news.places_in_detail',
         'news.published_at',
         'news.refined_title',
+        'news.clickbait',
         'news.reporting_intention',
         'news.reporting_style',
         'news.title',
@@ -1617,6 +1640,7 @@ export class NewsService {
       .where('authorId', '=', authorId)
       .executeTakeFirst();
 
+    console.log('existingFollow:', existingFollow);
     if (existingFollow) {
       // Unfollow
       await this.db
@@ -1837,6 +1861,7 @@ export class NewsService {
       )
       .selectAll()
       .select('news.id as id')
+      .distinctOn('news.id')
       .select(
         'free_user_to_unlocked_cluster.id as free_user_to_unlocked_cluster_id',
       )
@@ -1869,6 +1894,7 @@ export class NewsService {
       })
       .where('news.clusterId', 'is not', null)
       .orderBy('news.published_at', 'desc')
+      .orderBy('news.id')
       .limit(30)
       .offset(offset)
       .execute();

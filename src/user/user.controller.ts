@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -20,7 +21,9 @@ import {
   UpdateCanSendNotification,
   UpdateGameMode,
   UpdateMembershipSettings,
+  UpdateName,
   UpdatePushNotificationTokenDto,
+  UpdateTitle,
   UpdateUserExtraInfoDto,
 } from './user.dto';
 import * as bcrypt from 'bcrypt';
@@ -30,7 +33,7 @@ import { generateVerificationToken } from './utils/email-token.util';
 import { GmailService } from 'src/gmail/gmail.service';
 import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { TokenPayload } from 'src/app.dto';
-import { ColumnType } from 'kysely';
+
 import {
   AuthProvider,
   Identity,
@@ -38,9 +41,15 @@ import {
   InterestingTopic,
   PoliticalStance,
   Role,
+  TitleType,
   User,
 } from 'src/kysely/types';
-import { UserAuth } from 'generated/prisma';
+import * as multer from 'multer';
+import { GameService } from 'src/game/game.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { S3Service } from 'src/s3/s3.service';
+import timeUtil from 'utils/timeUtil';
+import { UnlockedTitle } from 'src/game/game.type';
 
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ACCESS_TOKEN_VALID_TIME = process.env.ACCESS_TOKEN_VALID_TIME;
@@ -51,7 +60,9 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly gmailService: GmailService,
+    private readonly gameService: GameService,
     private readonly jwtService: JwtService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Post('signup/email')
@@ -101,7 +112,7 @@ export class UserController {
               <a clicktracking="off" href="${full_url}" target="_blank">${full_url}</a>
             </li>
           </ul>
-          <p>FourSides 團隊敬上，</p>
+          <p>見方團隊敬上，</p>
           <p>此致敬禮</p>
         </div>
       `,
@@ -159,6 +170,7 @@ export class UserController {
         role: user.role ?? undefined,
         avatarUrl: user.avatarUrl ?? undefined,
         displayName: user.displayName ?? undefined,
+        chosenTitle: user.chosenTitle ?? '',
         onboardingNeeded: user.onboardingNeeded,
         gameMode: user.gameMode || false,
         canSendNotification: user.canSendNotification || false,
@@ -238,6 +250,7 @@ export class UserController {
       await this.generateTokensAndUpdateRefresh({
         id: user.id ?? undefined,
         authId: user.authId ?? '',
+        chosenTitle: user.chosenTitle ?? '',
         email: user.email ?? undefined,
         role: user.role ?? undefined,
         avatarUrl: user.avatarUrl ?? undefined,
@@ -286,6 +299,7 @@ export class UserController {
     const { accessToken, refreshToken, updatedUser } =
       await this.generateTokensAndUpdateRefresh({
         id: user.id ?? undefined,
+        chosenTitle: user.chosenTitle ?? '',
         authId: user.authId ?? '',
         email: user.email ?? undefined,
         role: user.role ?? undefined,
@@ -347,10 +361,60 @@ export class UserController {
     @Req() req: Request,
   ) {
     const payload: TokenPayload = req['user'];
-    return await this.userService.updateUserFavTopics({
+    const result = await this.userService.updateUserFavTopics({
       id: payload.userId,
       dto,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Patch('update/profile-pic')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: multer.memoryStorage(), // 🔥 store file in memory as buffer
+      limits: { fileSize: 5 * 1024 * 1024 }, // optional: max file size 5MB
+    }),
+  )
+  async updateProfilePic(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
+    const payload: TokenPayload = req['user'];
+    const url = await this.s3Service.uploadBuffer(file);
+    const result = await this.userService.updateProfilePic({
+      url: url,
+      userId: payload.userId,
+    });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return {
+      url,
+    };
   }
 
   @UseGuards(AuthGuard)
@@ -362,10 +426,23 @@ export class UserController {
   ) {
     const payload: TokenPayload = req['user'];
     console.log('payload:', payload);
-    return await this.userService.updateUserFavRegions({
+    const result = await this.userService.updateUserFavRegions({
       id: payload.userId,
       dto,
     });
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -376,10 +453,24 @@ export class UserController {
     @Req() req: Request,
   ) {
     const payload: TokenPayload = req['user'];
-    return await this.userService.updateUserIdentity({
+    const result = await this.userService.updateUserIdentity({
       id: payload.userId,
       dto,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -391,22 +482,76 @@ export class UserController {
   ) {
     console.log('dto:', dto);
     const payload: TokenPayload = req['user'];
-    return await this.userService.updateUserPoliticalStance({
+    const result = await this.userService.updateUserPoliticalStance({
       id: payload.userId,
       dto,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
   @Patch('update/name')
   @UseInterceptors(TrimUserResponseInterceptor)
-  async updateUserName(@Body() dto: { name: string }, @Req() req: Request) {
+  async updateUserName(@Body() dto: UpdateName, @Req() req: Request) {
     console.log('dto:', dto);
     const payload: TokenPayload = req['user'];
-    return await this.userService.updateUserName({
+    const result = await this.userService.updateUserName({
       id: payload.userId,
       dto,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
+  }
+
+  @UseGuards(AuthGuard)
+  @Patch('update/title')
+  @UseInterceptors(TrimUserResponseInterceptor)
+  async updateUserTitle(@Body() dto: UpdateTitle, @Req() req: Request) {
+    console.log('dto:', dto);
+    const payload: TokenPayload = req['user'];
+    const result = await this.userService.updateUserTitle({
+      id: payload.userId,
+      dto,
+    });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'PROFILE_CHANGE_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -498,6 +643,7 @@ export class UserController {
   private async generateTokensAndUpdateRefresh(user: {
     id?: string;
     authId: string;
+    chosenTitle?: string;
     email?: string;
     role?: Role;
     avatarUrl?: string;
@@ -515,6 +661,7 @@ export class UserController {
       role: user.role,
       avatatrUrl: user.avatarUrl || '',
       displayName: user.displayName || '',
+      chosenTitle: user.chosenTitle || '',
       onboardingNeeded: user.onboardingNeeded || true,
       gameMode: user.gameMode || true,
       canSendNotification: user.canSendNotification || false,
@@ -548,5 +695,72 @@ export class UserController {
       refreshToken,
       updatedUser,
     };
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('start-app-session')
+  @UseInterceptors(TrimUserResponseInterceptor)
+  async postStartAppSession(@Req() req: Request) {
+    const payload: TokenPayload = req['user'];
+    const userId = payload.userId;
+
+    const result = await this.userService.postStartAppSession({ userId });
+
+    const unlockedTitles: UnlockedTitle[] = [];
+
+    // Check if it is between 1am and 5am
+    if (
+      result?.startTime &&
+      timeUtil.isBetweenTaipei1And5AM(result.startTime)
+    ) {
+      const nightLoginTitle = await this.gameService.updateTitleProgress({
+        userId,
+        type: 'NIGHT_LOGIN_TOTAL',
+      });
+      if (nightLoginTitle) unlockedTitles.push(nightLoginTitle);
+    }
+
+    // Check if last session was 3 days ago
+    const lastSession = await this.userService.getLastAppSession(userId);
+    if (lastSession?.startTime) {
+      const now = timeUtil.getUnixTimestamp();
+      const gap = now - lastSession.startTime;
+      const THREE_DAYS = 3 * 86400;
+
+      if (gap >= THREE_DAYS) {
+        const reappearanceTitle = await this.gameService.updateTitleProgress({
+          userId,
+          type: 'REAPPEARANCE',
+        });
+        if (reappearanceTitle) unlockedTitles.push(reappearanceTitle);
+      }
+    }
+
+    return {
+      ...result,
+      unlockedTitles,
+    };
+  }
+
+  @UseGuards(AuthGuard)
+  @Patch('end-app-session')
+  @UseInterceptors(TrimUserResponseInterceptor)
+  async updateEndAppSession(@Req() req: Request) {
+    const payload: TokenPayload = req['user'];
+    const result = await this.userService.updateEndAppSession({
+      userId: payload.userId,
+    });
+
+    if (result?.endTime && result?.endTime - result?.startTime <= 5) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'QUICK_EXIT',
+      });
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+    return result;
   }
 }

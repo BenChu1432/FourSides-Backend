@@ -11,21 +11,6 @@ export enum Role {
   BETA_TESTER = 'BETA_TESTER',
 }
 
-export enum InterestingTopic {
-  國際 = '國際',
-  財經 = '財經',
-  科技 = '科技',
-  教育 = '教育',
-  社會 = '社會',
-  文化 = '文化',
-  環境 = '環境',
-  娛樂 = '娛樂',
-  健康 = '健康',
-  軍隊 = '軍隊',
-  運動 = '運動',
-  觀點 = '觀點',
-}
-
 export enum InterestingRegionOrCountry {
   // 台灣地區
   台北市 = '台北市',

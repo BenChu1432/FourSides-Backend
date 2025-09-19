@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 import { KyselyService } from 'src/kysely/kysely.service';
 import timeUtil from 'utils/timeUtil';
 import { UploadAnswerDto } from './game.dto';
+import { TitleType } from 'src/kysely/types';
 
 @Injectable()
 export class GameService {
@@ -71,11 +72,13 @@ export class GameService {
         'user_title.id',
         'user_title.userId',
         'emoji',
+        'condition_description',
         'condition',
         'explanation',
         'createdAt',
         'title.name',
         'title_stats.percentage_of_users as percentage',
+        'title.id as titleId',
       ])
       .where('user_title.userId', '=', userId)
       .execute();
@@ -133,6 +136,10 @@ export class GameService {
           .where('id', '=', userMission.id)
           .returningAll()
           .execute();
+        await this.updateTitleProgress({
+          userId: userId,
+          type: 'LOGIN_STREAK',
+        });
       }
     });
   }
@@ -270,6 +277,8 @@ export class GameService {
     const answer = result?.answer;
     return answer === dto.selected;
   }
+
+  // achivements
 
   async updateAchievementProgress({
     userId,
@@ -526,6 +535,199 @@ export class GameService {
           ]),
         )
         .execute();
+    }
+  }
+
+  // Title updates
+
+  async updateTitleProgress({
+    userId,
+    type,
+  }: {
+    userId: string;
+    type: TitleType;
+  }) {
+    const result = await this.db
+      .updateTable('user_title_progress')
+      .set((eb) => ({
+        progress: eb('progress', '+', 1),
+      }))
+      .where((eb) => eb.and([eb('userId', '=', userId), eb('type', '=', type)]))
+      .returningAll()
+      .executeTakeFirst();
+    if (!result?.progress) {
+      throw new HttpException(
+        'progress is missing',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    const title = await this.db
+      .selectFrom('title')
+      .selectAll()
+      .where((eb) =>
+        eb.and([
+          eb('title.type', '=', type),
+          eb('title.condition', '=', result?.progress),
+        ]),
+      )
+      .executeTakeFirst();
+    if (title?.condition === result.progress) {
+      await this.db
+        .insertInto('user_title')
+        .values({
+          userId: userId,
+          type: title.type,
+          titleId: title.id,
+          createdAt: timeUtil.getUnixTimestamp(),
+        })
+        .executeTakeFirst();
+
+      return title;
+    }
+  }
+
+  async updateUserClickbaitArticleClickProgress({
+    userId,
+  }: {
+    userId: string;
+  }) {
+    const result = await this.db
+      .updateTable('user_title_progress')
+      .set((eb) => ({
+        progress: eb('progress', '+', 1),
+      }))
+      .where((eb) =>
+        eb.and([
+          eb('userId', '=', userId),
+          eb('type', '=', 'CLICKBAIT_CLICK_TOTAL'),
+        ]),
+      )
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result?.progress) {
+      throw new HttpException(
+        'progress is missing',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const title = await this.db
+      .selectFrom('title')
+      .selectAll()
+      .where((eb) =>
+        eb.and([
+          eb('title.type', '=', 'CLICKBAIT_CLICK_TOTAL'),
+          eb('title.condition', '=', result?.progress),
+        ]),
+      )
+      .executeTakeFirst();
+    if (title?.condition === result.progress) {
+      await this.db
+        .insertInto('user_title')
+        .values({
+          userId: userId,
+          type: title.type,
+          titleId: title.id,
+          createdAt: timeUtil.getUnixTimestamp(),
+        })
+        .executeTakeFirst();
+      return title;
+    }
+  }
+
+  async updateUserTitleClickArticleTotal({ userId }: { userId: string }) {
+    const result = await this.db
+      .updateTable('user_title_progress')
+      .set((eb) => ({
+        progress: eb('progress', '+', 1),
+      }))
+      .where((eb) =>
+        eb.and([
+          eb('user_title_progress.type', '=', 'CLICK_ARTICLE_TOTAL'),
+          eb('user_title_progress.userId', '=', userId),
+        ]),
+      )
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result?.progress) {
+      throw new HttpException(
+        'progress is missing',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const title = await this.db
+      .selectFrom('title')
+      .selectAll()
+      .where((eb) =>
+        eb.and([
+          eb('title.type', '=', 'CLICK_ARTICLE_TOTAL'),
+          eb('title.condition', '=', result?.progress),
+        ]),
+      )
+      .executeTakeFirst();
+
+    if (title?.condition === result.progress) {
+      await this.db
+        .insertInto('user_title')
+        .values({
+          userId: userId,
+          type: title.type,
+          titleId: title.id,
+          createdAt: timeUtil.getUnixTimestamp(),
+        })
+        .executeTakeFirst();
+
+      return title;
+    }
+  }
+
+  async updateAbandonDraft({ userId }: { userId: string }) {
+    const result = await this.db
+      .updateTable('user_title_progress')
+      .set((eb) => ({
+        progress: eb('progress', '+', 1),
+      }))
+      .where((eb) =>
+        eb.and([
+          eb('user_title_progress.type', '=', 'DRAFT_ABANDON'),
+          eb('user_title_progress.userId', '=', userId),
+        ]),
+      )
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result?.progress) {
+      throw new HttpException(
+        'progress is missing',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const title = await this.db
+      .selectFrom('title')
+      .selectAll()
+      .where((eb) =>
+        eb.and([
+          eb('title.type', '=', 'DRAFT_ABANDON'),
+          eb('title.condition', '=', result?.progress),
+        ]),
+      )
+      .executeTakeFirst();
+    if (title?.condition === result.progress) {
+      await this.db
+        .insertInto('user_title')
+        .values({
+          userId: userId,
+          type: title.type,
+          titleId: title.id,
+          createdAt: timeUtil.getUnixTimestamp(),
+        })
+        .executeTakeFirst();
+
+      return title;
     }
   }
 }

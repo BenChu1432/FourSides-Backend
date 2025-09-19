@@ -45,10 +45,15 @@ export class ActivityInterceptor implements NestInterceptor {
             // - Log login activity
             // - Update game missions
             // - Update achievements
+            // - Update titles
             // Use Promise.all to run them in parallel for better performance
             return from(
               Promise.all([
                 this.activityService.logActivity(userId, 'LOGIN'),
+                this.gameService.updateTitleProgress({
+                  userId: userId,
+                  type: 'LOGIN_TOTAL',
+                }),
                 this.gameService.updateDailyMissionProgress({
                   userId,
                   missionTitle: '✍🏻 總登入日數',

@@ -45,7 +45,10 @@ export class ForumController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-
+    const unlockedTitle = await this.gameService.updateTitleProgress({
+      userId: payload.userId,
+      type: 'COMMENT_TOTAL',
+    });
     await this.gameService.updateDailyMissionProgress({
       userId: payload.userId,
       missionTitle: '💬 留言',
@@ -56,7 +59,11 @@ export class ForumController {
         achievementId: 6,
       });
 
-    return { achievementUnlocked: achievementUnlocked, ...result };
+    return {
+      achievementUnlocked: achievementUnlocked,
+      ...result,
+      unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+    };
   }
 
   @UseGuards(AuthGuard)
@@ -64,10 +71,24 @@ export class ForumController {
   async reply(@Req() req: Request, @Body() dto: ReplyDto) {
     const payload: TokenPayload = req['user'];
     console.log('dto:', dto);
-    return await this.forumService.reply({
+    const result = await this.forumService.reply({
       userId: payload.userId,
       dto: dto,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'COMMENT_REPLY_TOTAL',
+      });
+
+      return {
+        ...result,
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+      };
+    }
+
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -95,9 +116,10 @@ export class ForumController {
   async dilike(@Req() req: Request, @Body() dto: LikeCommentDto) {
     const payload: TokenPayload = req['user'];
     console.log('dto:', dto);
-    return await this.forumService.dislike({
+    const result = await this.forumService.dislike({
       userId: payload.userId,
       dto: dto,
     });
+    return result;
   }
 }

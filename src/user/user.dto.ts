@@ -5,10 +5,11 @@ import {
   IsNotEmpty,
   IsEmpty,
   IsString,
+  IsNumber,
 } from 'class-validator';
 import { AuthProvider } from './user.enum';
-import { Identity, InterestingTopic, PoliticalStance } from './user.enum';
-import { InterestingRegionOrCountry } from 'src/kysely/types';
+import { Identity, PoliticalStance } from './user.enum';
+import { InterestingRegionOrCountry, InterestingTopic } from 'src/kysely/types';
 import { IsValidUserName } from './validators/username.validator';
 
 export class RegisterDto {
@@ -93,6 +94,18 @@ export class UpdateUserExtraInfoDto {
 
   @IsOptional()
   politicalStance: PoliticalStance;
+}
+
+export class UpdateName {
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+}
+
+export class UpdateTitle {
+  @IsNotEmpty()
+  @IsNumber()
+  titleId: number;
 }
 
 export class UpdateGameMode {

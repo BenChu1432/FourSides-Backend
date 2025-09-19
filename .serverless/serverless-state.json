@@ -1,0 +1,182 @@
+{
+  "service": {
+    "service": "foursides-profile-pictures-bucket",
+    "serviceObject": {
+      "name": "foursides-profile-pictures-bucket"
+    },
+    "provider": {
+      "name": "aws",
+      "region": "ap-northeast-1",
+      "runtime": "nodejs18.x",
+      "iam": {
+        "role": {
+          "statements": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject"
+              ],
+              "Resource": [
+                "arn:aws:s3:::foursides-profile-pictures-bucket-dev/*",
+                "arn:aws:s3:::foursides-profile-pictures-bucket-dev"
+              ]
+            }
+          ]
+        }
+      },
+      "stage": "dev",
+      "versionFunctions": true,
+      "compiledCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "ProfilePicsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+              "BucketName": "foursides-profile-pictures-bucket-dev",
+              "CorsConfiguration": {
+                "CorsRules": [
+                  {
+                    "AllowedOrigins": [
+                      "*"
+                    ],
+                    "AllowedMethods": [
+                      "GET",
+                      "PUT",
+                      "POST"
+                    ],
+                    "AllowedHeaders": [
+                      "*"
+                    ],
+                    "MaxAge": 3000
+                  }
+                ]
+              },
+              "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": true,
+                "BlockPublicPolicy": false,
+                "IgnorePublicAcls": true,
+                "RestrictPublicBuckets": false
+              }
+            }
+          },
+          "BucketPublicReadPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+              "Bucket": {
+                "Ref": "ProfilePicsBucket"
+              },
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Sid": "AllowPublicRead",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": [
+                      "s3:GetObject"
+                    ],
+                    "Resource": "arn:aws:s3:::foursides-profile-pictures-bucket-dev/*"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": "serverless-framework-deployments-ap-northeast-1-f5196eea-3dd8",
+            "Export": {
+              "Name": "sls-foursides-profile-pictures-bucket-dev-ServerlessDeploymentBucketName"
+            }
+          }
+        }
+      }
+    },
+    "custom": {
+      "bucketName": "foursides-profile-pictures-bucket-dev"
+    },
+    "pluginsData": {},
+    "functions": {},
+    "resources": {
+      "Resources": {
+        "ProfilePicsBucket": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+            "BucketName": "foursides-profile-pictures-bucket-dev",
+            "CorsConfiguration": {
+              "CorsRules": [
+                {
+                  "AllowedOrigins": [
+                    "*"
+                  ],
+                  "AllowedMethods": [
+                    "GET",
+                    "PUT",
+                    "POST"
+                  ],
+                  "AllowedHeaders": [
+                    "*"
+                  ],
+                  "MaxAge": 3000
+                }
+              ]
+            },
+            "PublicAccessBlockConfiguration": {
+              "BlockPublicAcls": true,
+              "BlockPublicPolicy": false,
+              "IgnorePublicAcls": true,
+              "RestrictPublicBuckets": false
+            }
+          }
+        },
+        "BucketPublicReadPolicy": {
+          "Type": "AWS::S3::BucketPolicy",
+          "Properties": {
+            "Bucket": {
+              "Ref": "ProfilePicsBucket"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AllowPublicRead",
+                  "Effect": "Allow",
+                  "Principal": "*",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": "arn:aws:s3:::foursides-profile-pictures-bucket-dev/*"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "Outputs": {}
+    },
+    "configValidationMode": "warn",
+    "serviceFilename": "serverless",
+    "initialServerlessConfig": {
+      "service": "foursides-profile-pictures-bucket",
+      "frameworkVersion": ">=4",
+      "provider": {
+        "$ref": "$[\"service\"][\"provider\"]"
+      },
+      "resources": {
+        "$ref": "$[\"service\"][\"resources\"]"
+      },
+      "custom": {
+        "$ref": "$[\"service\"][\"custom\"]"
+      }
+    },
+    "appId": null,
+    "orgId": null,
+    "layers": {}
+  },
+  "package": {
+    "artifactDirectoryName": "serverless/foursides-profile-pictures-bucket/dev/1758135991184-2025-09-17T19:06:31.184Z",
+    "artifact": ""
+  }
+}

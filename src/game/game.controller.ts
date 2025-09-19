@@ -73,7 +73,7 @@ export class GameController {
           userId: payload.userId,
           achievementId: 5,
         });
-      return { achievementUnlocked: achievementUnlocked, correct: result };
+      return { achievementUnlocked, correct: result };
     }
     return { achievementUnlocked: false, correct: result };
   }
@@ -102,24 +102,68 @@ export class GameController {
         });
       return { achievementUnlocked: achievementUnlocked, correct: result };
     }
+  }
 
-    await this.gameService.updateReadPoliticallyDifferentArticlesMissionAndAchievement(
-      {
-        userId: payload.userId,
-        userQuestionId: dto.newsQuestionId,
-        clusterId: dto.clusterId,
-      },
-    );
-    return { achievementUnlocked: false, correct: result };
+  @UseGuards(AuthGuard)
+  @Post('/update-user-title-click-article-total')
+  async updateUserTitleClickArticleTotal(
+    @Req() req: Request,
+    @Body() dto: UploadAnswerDto,
+  ) {
+    const payload: TokenPayload = req['user'];
+
+    await this.gameService.updateUserTitleClickArticleTotal({
+      userId: payload.userId,
+    });
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/update-user-clickbait-article-click-total')
+  async updateUserClickbaitClickArticleTotal(
+    @Req() req: Request,
+    @Body() dto: UploadAnswerDto,
+  ) {
+    const payload: TokenPayload = req['user'];
+
+    await this.gameService.updateUserClickbaitArticleClickProgress({
+      userId: payload.userId,
+    });
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/update-user-share-news-total')
+  async updateUserShareNewsTotal(@Req() req: Request) {
+    const payload: TokenPayload = req['user'];
+
+    const unlockedTitle = await this.gameService.updateTitleProgress({
+      userId: payload.userId,
+      type: 'NEWS_SHARE_TOTAL',
+    });
+
+    return {
+      unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+    };
   }
 
   @UseGuards(AuthGuard)
   @Post('/reap-rewards')
   async reapRewards(@Req() req: Request, @Body() dto: ReapRewardsDto) {
     const payload: TokenPayload = req['user'];
-    return await this.gameService.reapRewards({
+    const result = await this.gameService.reapRewards({
       userId: payload.userId,
       userMissionId: dto.userMissionId,
     });
+
+    if (result) {
+      const unlockedTitle = await this.gameService.updateTitleProgress({
+        userId: payload.userId,
+        type: 'REWARD_CLAIM_TOTAL',
+      });
+      return {
+        unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
+        ...result,
+      };
+    }
+    return result;
   }
 }

@@ -43,6 +43,32 @@ export const QuestionType = {
     MISGUIDING_TECHNIQUES_QUESTION: "MISGUIDING_TECHNIQUES_QUESTION"
 } as const;
 export type QuestionType = (typeof QuestionType)[keyof typeof QuestionType];
+export const TitleType = {
+    LOGIN_TOTAL: "LOGIN_TOTAL",
+    LOGIN_STREAK: "LOGIN_STREAK",
+    SUBSCRIPTION: "SUBSCRIPTION",
+    CLICK_ARTICLE_TOTAL: "CLICK_ARTICLE_TOTAL",
+    COMMENT_TOTAL: "COMMENT_TOTAL",
+    COMMENT_REPLY_TOTAL: "COMMENT_REPLY_TOTAL",
+    COMMENT_LIKE_TOTAL: "COMMENT_LIKE_TOTAL",
+    COMMENT_DISLIKE_TOTAL: "COMMENT_DISLIKE_TOTAL",
+    PROFILE_CHANGE_TOTAL: "PROFILE_CHANGE_TOTAL",
+    CLICKBAIT_CLICK_TOTAL: "CLICKBAIT_CLICK_TOTAL",
+    AI_ANALYSIS_TOTAL: "AI_ANALYSIS_TOTAL",
+    NIGHT_LOGIN_TOTAL: "NIGHT_LOGIN_TOTAL",
+    AVATAR_CHANGE_TOTAL: "AVATAR_CHANGE_TOTAL",
+    NEWS_LIKE_TOTAL: "NEWS_LIKE_TOTAL",
+    NEWS_DISLIKE_TOTAL: "NEWS_DISLIKE_TOTAL",
+    NEWS_SHARE_TOTAL: "NEWS_SHARE_TOTAL",
+    NEWS_VOTE_TOTAL: "NEWS_VOTE_TOTAL",
+    JOURNALIST_FOLLOW_TOTAL: "JOURNALIST_FOLLOW_TOTAL",
+    SEARCH_TOTAL: "SEARCH_TOTAL",
+    DRAFT_ABANDON: "DRAFT_ABANDON",
+    REAPPEARANCE: "REAPPEARANCE",
+    QUICK_EXIT: "QUICK_EXIT",
+    REWARD_CLAIM_TOTAL: "REWARD_CLAIM_TOTAL"
+} as const;
+export type TitleType = (typeof TitleType)[keyof typeof TitleType];
 export const ActivityType = {
     LOGIN: "LOGIN",
     LOGOUT: "LOGOUT",
@@ -674,11 +700,14 @@ export type Title = {
     name: string;
     explanation: string;
     emoji: string;
-    condition: string;
+    condition: number;
+    condition_description: string;
+    type: TitleType;
 };
 export type User = {
     id: Generated<string>;
     displayName: string | null;
+    chosenTitle: string | null;
     avatarUrl: string | null;
     isBlocked: Generated<boolean>;
     onboardingNeeded: Generated<boolean>;
@@ -721,6 +750,12 @@ export type UserAnswer = {
     clusterId: string;
     selectedOption: string;
     answeredAt: number;
+};
+export type UserAppSession = {
+    id: Generated<string>;
+    userId: string;
+    startTime: number;
+    endTime: number | null;
 };
 export type UserAppSettingPreference = {
     id: Generated<string>;
@@ -765,6 +800,7 @@ export type UserTitle = {
     userId: string;
     titleId: number;
     createdAt: number;
+    type: TitleType;
 };
 export type UserTitleProgress = {
     id: Generated<number>;
@@ -774,6 +810,7 @@ export type UserTitleProgress = {
     updatedAt: number;
     createdAt: number;
     completed: Generated<boolean>;
+    type: TitleType;
 };
 export type UserToAuthor = {
     id: Generated<string>;
@@ -809,11 +846,12 @@ export type DB = {
     user_activity: UserActivity;
     user_activity_counter: UserActivityCounter;
     user_answer: UserAnswer;
+    user_app_session: UserAppSession;
     user_app_setting_preference: UserAppSettingPreference;
     user_article_read: UserArticleRead;
     user_auth: UserAuth;
     user_mission: UserMission;
     user_title: UserTitle;
+    user_title_progress: UserTitleProgress;
     user_to_author: UserToAuthor;
-    UserTitleProgress: UserTitleProgress;
 };

@@ -18,6 +18,7 @@ import { LLMModule } from './llm/llm.module';
 import { ActivityModule } from './activity/activity.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ActivityInterceptor } from './common/activity.interceptor';
+import { S3Service } from './s3/s3.service';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ActivityInterceptor } from './common/activity.interceptor';
       provide: APP_INTERCEPTOR,
       useClass: ActivityInterceptor,
     },
+    S3Service,
   ],
 })
 export class AppModule {}

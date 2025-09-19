@@ -418,13 +418,15 @@ model UserMission {
 }
 
 model Title {
-  id                Int                 @id @default(autoincrement())
-  name              String              @unique
-  explanation       String
-  emoji             String
-  condition         String
-  userTitles        UserTitle[]
-  userTitleProgress UserTitleProgress[]
+  id                      Int                 @id @default(autoincrement())
+  name                    String              @unique
+  explanation             String
+  emoji                   String
+  condition               Int
+  condition_description   String
+  type                    TitleType 
+  userTitles              UserTitle[]
+  userTitleProgress       UserTitleProgress[]
 
   @@map("title")
 }
@@ -434,6 +436,7 @@ model UserTitle {
   userId    String @db.Uuid
   titleId   Int
   createdAt Int
+  type      TitleType
   title     Title  @relation(fields: [titleId], references: [id])
   user      User   @relation(fields: [userId], references: [id])
 
@@ -451,8 +454,10 @@ model UserTitleProgress {
   completed Boolean @default(false)
   Title     Title   @relation(fields: [titleId], references: [id])
   User      User    @relation(fields: [userId], references: [id])
+  type      TitleType
 
   @@unique([userId, titleId])
+  @@map("user_title_progress")
 }
 
 model Achievement {
@@ -509,9 +514,20 @@ model Comment {
   @@map("comment")
 }
 
+model UserAppSession {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @db.Uuid
+  startTime Int      // Unix timestamp (e.g., in seconds)
+  endTime   Int?     // Nullable for ongoing sessions
+
+  @@map("user_app_session")
+}
+
 model User {
   id                        String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayName               String?
+  chosenTitle               String?
   avatarUrl                 String?
   isBlocked                 Boolean                      @default(false)
   onboardingNeeded          Boolean                      @default(true)
@@ -524,6 +540,7 @@ model User {
   regionsInterestedIn       InterestingRegionOrCountry[]
   politicalStance           PoliticalStance?
   identity                  Identity?
+
   userAchievement           UserAchievement[]
   userActivity              UserActivity[]
   userActivityCounter       UserActivityCounter[]
@@ -543,6 +560,7 @@ model User {
   freeUserToUnlockedCluster FreeUserToUnlockedCluster[]
   userToAuthor              UserToAuthor[]
   userTitleProgress         UserTitleProgress[]
+  appSessions               UserAppSession[]
 
   @@map("user")
 }
@@ -618,6 +636,32 @@ model ScrapeJob {
   failures   ScrapeFailure[]
 
   @@map("scrape_jobs")
+}
+
+enum TitleType {
+  LOGIN_TOTAL
+  LOGIN_STREAK
+  SUBSCRIPTION
+  CLICK_ARTICLE_TOTAL
+  COMMENT_TOTAL
+  COMMENT_REPLY_TOTAL
+  COMMENT_LIKE_TOTAL
+  COMMENT_DISLIKE_TOTAL
+  PROFILE_CHANGE_TOTAL
+  CLICKBAIT_CLICK_TOTAL
+  AI_ANALYSIS_TOTAL
+  NIGHT_LOGIN_TOTAL
+  AVATAR_CHANGE_TOTAL
+  NEWS_LIKE_TOTAL
+  NEWS_DISLIKE_TOTAL
+  NEWS_SHARE_TOTAL
+  NEWS_VOTE_TOTAL
+  JOURNALIST_FOLLOW_TOTAL
+  SEARCH_TOTAL
+  DRAFT_ABANDON
+  REAPPEARANCE
+  QUICK_EXIT
+  REWARD_CLAIM_TOTAL
 }
 
 enum ActivityType {

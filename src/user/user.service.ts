@@ -254,7 +254,6 @@ export class UserService {
 
       // Step 5: Insert missions
       const missions = await trx.selectFrom('mission').selectAll().execute();
-
       if (!missions || missions.length === 0) {
         throw new HttpException(
           'No missions found to assign to user',
@@ -262,27 +261,20 @@ export class UserService {
         );
       }
 
-      // Prepare user_missions entries
       const userMissionsToInsert = missions.map((mission) => ({
         userId: user.id,
         missionId: mission.id,
         progress: 0,
         completed: false,
-        finishedAt: null,
         updatedAt: unixTimestamp,
         createdAt: unixTimestamp,
       }));
 
-      const userMissions = await trx
-        .insertInto('user_mission')
-        .values(userMissionsToInsert)
-        .execute();
-
-      if (!userMissions) {
-        throw new HttpException(
-          `Failed to create missions for the user: ${user.id}`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
+      if (userMissionsToInsert.length > 0) {
+        await trx
+          .insertInto('user_mission')
+          .values(userMissionsToInsert)
+          .execute();
       }
 
       // Step 6: Insert achievements
@@ -290,45 +282,44 @@ export class UserService {
         .selectFrom('achievement')
         .selectAll()
         .execute();
-
       const userAchievementToInsert = achievements.map((achievement) => ({
         userId: user.id,
-        progress: 0,
+        cumulative_num: 0,
+        max_num: 0,
         achievementId: achievement.id,
       }));
 
-      const userAchievement = await trx
-        .insertInto('user_achievement')
-        .values(userAchievementToInsert)
-        .execute();
-
-      if (!userAchievement) {
-        throw new HttpException(
-          `Failed to create achievements for the user: ${user.id}`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
+      if (userAchievementToInsert.length > 0) {
+        await trx
+          .insertInto('user_achievement')
+          .values(userAchievementToInsert)
+          .execute();
       }
 
-      // For dev and testing: Insert titles
-      // const titles = await trx.selectFrom('title').selectAll().execute();
+      // Step 7: Inserting titles
+      const titles = await trx
+        .selectFrom('title')
+        .select(['id', 'type'])
+        .distinctOn('type')
+        .execute();
+      const timestamp = timeUntils.getUnixTimestamp();
+      const userTitleProgressToInsert = titles.map((t) => ({
+        userId: user.id,
+        type: t.type,
+        titleId: t.id,
+        progress: 0,
+        completed: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }));
 
-      // const titlesToInsert = titles.map((title) => ({
-      //   userId: user.id,
-      //   titleId: title.id,
-      //   createdAt: timeUntils.getUnixTimestamp(),
-      // }));
-
-      // const userTitles = await trx
-      //   .insertInto('user_title')
-      //   .values(titlesToInsert)
-      //   .execute();
-
-      // if (!userTitles) {
-      //   throw new HttpException(
-      //     `Failed to create titles for the user: ${user.id}`,
-      //     HttpStatus.INTERNAL_SERVER_ERROR,
-      //   );
-      // }
+      console.log('userTitleProgressToInsert:', userTitleProgressToInsert);
+      if (userTitleProgressToInsert.length > 0) {
+        await trx
+          .insertInto('user_title_progress')
+          .values(userTitleProgressToInsert)
+          .execute();
+      }
 
       // Final result to return from transaction
       return {
@@ -470,6 +461,33 @@ export class UserService {
     return updatedUser;
   }
 
+  async updateUserTitle({ id, dto }: { id: string; dto: { titleId: number } }) {
+    const title = await this.db
+      .selectFrom('title')
+      .select(['title.name', 'title.emoji'])
+      .where('title.id', '=', dto.titleId)
+      .executeTakeFirst();
+    const chosenTitle = title?.emoji
+      ? Array.from(title?.emoji)[0] + title?.name
+      : '' + title?.name;
+
+    await this.db
+      .updateTable('user')
+      .set({
+        chosenTitle: chosenTitle,
+      })
+      .where('id', '=', id)
+      .execute();
+
+    const updatedUser = await this.db
+      .selectFrom('user')
+      .select(['displayName', 'chosenTitle'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    return updatedUser;
+  }
+
   async updateUserName({ id, dto }: { id: string; dto: { name: string } }) {
     await this.db
       .updateTable('user')
@@ -562,5 +580,49 @@ export class UserService {
       .executeTakeFirst();
 
     return updatedSettings;
+  }
+
+  async updateProfilePic({ userId, url }: { userId: string; url: string }) {
+    return await this.db
+      .updateTable('user')
+      .set({ avatarUrl: url })
+      .where('id', '=', userId)
+      .execute();
+  }
+
+  async postStartAppSession({ userId }: { userId: string }) {
+    return await this.db
+      .insertInto('user_app_session')
+      .values({
+        userId: userId,
+        startTime: timeUntils.getUnixTimestamp(),
+      })
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  async updateEndAppSession({ userId }: { userId: string }) {
+    return await this.db
+      .updateTable('user_app_session')
+      .set({
+        endTime: timeUntils.getUnixTimestamp(),
+      })
+      .where('user_app_session.userId', '=', userId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  async getLastAppSession(userId: string) {
+    const db = this.db; // assuming your Kysely instance is in `this.db`
+
+    const lastSession = await db
+      .selectFrom('user_app_session')
+      .select(['id', 'startTime', 'endTime', 'userId'])
+      .where('userId', '=', userId)
+      .orderBy('startTime', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    return lastSession ?? null;
   }
 }

@@ -7,6 +7,7 @@ export class TokenPayload {
   role?: Role;
   avatatrUrl: string;
   displayName: string;
+  chosenTitle: string;
   onboardingNeeded: boolean;
   gameMode: boolean;
   canSendNotification: boolean;

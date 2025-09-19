@@ -1,0 +1,318 @@
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum Role {
+  OWNER
+  FREE_USER
+  PAID_USER
+  BETA_TESTER
+}
+
+enum ErrorTypeEnum {
+  UNMAPPED_MEDIA
+  PARSING_FAILURE
+  PARSING_ERROR
+  ZERO_URLS_FETCHED
+  OTHERS
+}
+
+enum InterestingTopic {
+  國際
+  財經
+  科技
+  教育
+  社會
+  文化
+  環境
+  娛樂
+  健康
+  軍隊
+  運動
+  觀點
+}
+
+enum InterestingRegionOrCountry {
+  台北市
+  新北市
+  桃園市
+  台中市
+  台南市
+  高雄市
+  基隆市
+  新竹市
+  嘉義市
+  宜蘭縣
+  花蓮縣
+  台東縣
+  南投縣
+  彰化縣
+  雲林縣
+  屏東縣
+  苗栗縣
+  新竹縣
+  嘉義縣
+  澎湖縣
+  金門縣
+  連江縣
+  香港
+  中國
+  美國
+  加沙
+  以色列
+  烏克蘭
+  歐盟
+  日本
+  韓國
+}
+
+enum Identity {
+  台北人
+  新北人
+  桃園人
+  台中人
+  台南人
+  高雄人
+  基隆人
+  新竹人
+  嘉義人
+  宜蘭人
+  花蓮人
+  台東人
+  南投人
+  彰化人
+  雲林人
+  屏東人
+  苗栗人
+  澎湖人
+  金門人
+  連江人
+  其他
+}
+
+enum PoliticalStance {
+  深綠
+  淺綠
+  中立
+  淺藍
+  深藍
+}
+
+enum MediaNameEnum {
+  CTS
+  TSSDNews
+  CTWant
+  TaiwanNews
+  TTV
+  CTINews
+  HongKongFreePress
+  MingPaoNews
+  SingTaoDaily
+  SCMP
+  ChineseNewYorkTimes
+  DeutscheWelle
+  HKFreePress
+  WenWeiPo
+  OrientalDailyNews
+  TaKungPao
+  HK01
+  InitiumMedia
+  YahooNews
+  HKCD
+  TheEpochTimes
+  NowTV
+  ChineseBBC
+  VOC
+  HKCourtNews
+  ICable
+  HKGovernmentNews
+  OrangeNews
+  TheStandard
+  HKEJ
+  HKET
+  RTHK
+  TheWitness
+  InMediaHK
+  PeopleDaily
+  XinhuaNewsAgency
+  GlobalTimes
+  CCTV
+  UnitedDailyNews
+  LibertyTimesNet
+  ChinaTimes
+  CNA
+  PTSNews
+  CTEE
+  MyPeopleVol
+  TaiwanTimes
+  ChinaDailyNews
+  SETN
+  NextAppleNews
+  MirrorMedia
+  NowNews
+  StormMedia
+  TVBS
+  EBCNews
+  ETtoday
+  NewTalk
+  FTV
+}
+
+enum OriginEnum {
+  native
+  CTS
+  TSSDNews
+  CTWant
+  TaiwanNews
+  TTV
+  CTINews
+  HongKongFreePress
+  MingPaoNews
+  SingTaoDaily
+  SCMP
+  ChineseNewYorkTimes
+  DeutscheWelle
+  HKFreePress
+  WenWeiPo
+  OrientalDailyNews
+  TaKungPao
+  HK01
+  InitiumMedia
+  YahooNews
+  HKCD
+  TheEpochTimes
+  NowTV
+  ChineseBBC
+  VOC
+  HKCourtNews
+  ICable
+  HKGovernmentNews
+  OrangeNews
+  TheStandard
+  HKEJ
+  HKET
+  RTHK
+  TheWitness
+  InMediaHK
+  PeopleDaily
+  XinhuaNewsAgency
+  GlobalTimes
+  CCTV
+  UnitedDailyNews
+  LibertyTimesNet
+  ChinaTimes
+  CNA
+  PTSNews
+  CTEE
+  MyPeopleVol
+  TaiwanTimes
+  ChinaDailyNews
+  SETN
+  NextAppleNews
+  MirrorMedia
+  NowNews
+  StormMedia
+  TVBS
+  EBCNews
+  ETtoday
+  NewTalk
+  FTV
+}
+
+model Cluster {
+  id              Int     @id @default(autoincrement())
+  cluster_name    String? @unique
+  cluster_summary String? @unique
+  processed_at    Int?
+
+  // One-to-many relation to News
+  news News[]
+
+  @@map("cluster")
+}
+
+model News {
+  id           Int            @id @default(autoincrement())
+  media_name   MediaNameEnum?
+  url          String?        @unique
+  title        String?
+  origin       OriginEnum?
+  content      String?
+  content_en   String?
+  published_at Int?
+  authors      String[]
+  images       String[]
+
+  clusterId Int?
+  cluster   Cluster? @relation(fields: [clusterId], references: [id])
+
+  @@index([id])
+  @@map("news")
+}
+
+model User {
+  id                         String                       @id @default(uuid())
+  displayName                String?
+  avatarUrl                  String?
+  isBlocked                  Boolean                      @default(false)
+  onboardingNeeded           Boolean                      @default(true)
+  role                       Role                         @default(FREE_USER)
+  createdAt                  Int
+  updatedAt                  Int
+  canSendNotification        Boolean                      @default(false)
+  gameMode                   Boolean                      @default(true)
+  seeReportingMerits         Boolean                      @default(false)
+  seeMisguidingTechniques    Boolean                      @default(false)
+  seeReportingStyle          Boolean                      @default(false)
+  seeReportingIntention      Boolean                      @default(false)
+  removeSensationalHeadlines Boolean                      @default(false)
+  removeCopyPasteArticles    Boolean                      @default(false)
+  topicsInterestedIn         InterestingTopic[]
+  regionsInterestedIn        InterestingRegionOrCountry[]
+  politicalStance            PoliticalStance?
+  identity                   Identity?
+
+  // Relation to auth
+  auth UserAuth?
+
+  @@map("users")
+}
+
+model UserAuth {
+  id                String       @id @default(uuid())
+  userId            String       @unique
+  user              User         @relation(fields: [userId], references: [id])
+  authProvider      AuthProvider @default(EMAIL)
+  email             String?      @unique
+  password          String?
+  providerId        String?
+  refreshToken      String?
+  verificationToken String?
+  emailVerified     Boolean      @default(false)
+
+  @@map("user_auth")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ScrapeFailure {
+  id           Int           @id @default(autoincrement())
+  failure_type ErrorTypeEnum
+  media_name   String?
+  url          String?
+  reason       String?
+  timestamp    Int
+  resolved     Boolean       @default(false)
+
+  @@map("scrape_failures")
+}
