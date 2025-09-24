@@ -41,8 +41,6 @@ import {
   InterestingTopic,
   PoliticalStance,
   Role,
-  TitleType,
-  User,
 } from 'src/kysely/types';
 import * as multer from 'multer';
 import { GameService } from 'src/game/game.service';

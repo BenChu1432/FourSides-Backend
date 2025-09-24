@@ -98,3 +98,9 @@ export class DislikeArticleDto {
   @IsString()
   newsId: string;
 }
+
+export class PostAddUserReadSpecificNewsArticleDto {
+  @IsNotEmpty()
+  @IsString()
+  newsId: string;
+}

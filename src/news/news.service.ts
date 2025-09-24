@@ -8,7 +8,7 @@ import cluster from 'cluster';
 import { ForumService } from 'src/forum/forum.service';
 import timeUtil from 'utils/timeUtil';
 import getClustersUtil from './util/getClustersUtil';
-import { identityToRegionMap } from 'constant/constants';
+import { identityToRegionMap, MisreadMedia } from 'constant/constants';
 import { getClusters } from './util/general-queries';
 import { DislikeArticleDto, LikeArticleDto } from './news.dto';
 
@@ -29,17 +29,31 @@ export class NewsService {
     offset: number;
   }) {
     console.log('offset:', offset);
-    const sub = getClusters(this.db, userId).as('c');
 
-    // Aliases are now real columns on subquery "c"
-    return await this.db
-      .selectFrom(sub)
-      .selectAll()
+    // Step 1: Fetch 30 cluster IDs based on latest_published
+    const idRows = await this.db
+      .selectFrom('cluster')
+      .select(['id'])
       .where('id', 'is not', null)
       .orderBy('latest_published', 'desc')
       .limit(30)
       .offset(offset)
       .execute();
+
+    const clusterIds = idRows.map((row) => row.id);
+
+    if (clusterIds.length === 0) {
+      return [];
+    }
+
+    // Step 2: Fetch full clusters based on the selected IDs
+    const clusters = await getClusters(this.db, userId)
+      .where('cluster.id', 'in', clusterIds)
+      // Optional: preserve order (if needed)
+      .orderBy('cluster.latest_published', 'desc')
+      .execute();
+
+    return clusters;
   }
 
   async getPopularClusters({
@@ -50,24 +64,40 @@ export class NewsService {
     offset: number;
   }) {
     console.log('offset:', offset);
-    const sub = getClusters(this.db, userId).as('c');
 
-    // Aliases are now real columns on subquery "c"
-    return await this.db
-      .selectFrom(sub)
-      .selectAll()
-      .where((eb) =>
-        eb.and([
-          eb('id', 'is not', null),
-          eb('latest_published', '>=', timeUtil.getLast72HoursTimestamp()),
-          eb('media_count', '>=', 7),
-        ]),
+    const idRows = await this.db
+      .selectFrom('cluster')
+      .select(['cluster.id'])
+      .leftJoin(
+        'cluster_vote_summary',
+        'cluster_vote_summary.clusterId',
+        'cluster.id',
       )
-      .orderBy('latest_published', 'desc')
-      .orderBy('media_count', 'desc')
-      .orderBy('news_count', 'desc')
+      .leftJoin('news', 'news.clusterId', 'cluster.id')
+      .leftJoin('news_media', (join) =>
+        join.on(sql`news_media.name`, '=', sql`news.media_name::text`),
+      )
+      .where(
+        'cluster.latest_published',
+        '>=',
+        timeUtil.getLast72HoursTimestamp(),
+      )
+      .groupBy('cluster.id')
+      .having((eb) => eb.fn.count(sql`distinct news_media.id`), '>=', 3)
+      .orderBy('cluster.latest_published', 'desc')
+      .orderBy((eb) => eb.fn.count(sql`distinct news_media.id`), 'desc')
+      .orderBy((eb) => eb.fn.count('news.id'), 'desc')
       .limit(30)
       .offset(offset)
+      .execute();
+
+    const clusterIds = idRows.map((row) => row.id);
+
+    if (clusterIds.length === 0) return [];
+
+    return await getClusters(this.db, userId)
+      .where('cluster.id', 'in', clusterIds)
+      .orderBy('cluster.latest_published', 'desc')
       .execute();
   }
 
@@ -168,6 +198,35 @@ export class NewsService {
       .orderBy(sql`"news_count"`, 'desc')
       .offset(offset)
       .limit(30)
+      .execute();
+  }
+
+  async getMisreadNews({ userId, offset }: { userId: string; offset: number }) {
+    return await this.db
+      .selectFrom('news')
+      .leftJoin('cluster', 'cluster.id', 'news.clusterId')
+      .leftJoin('news_reaction', (join) =>
+        join
+          .onRef('news_reaction.newsId', '=', 'news.id')
+          .on('news_reaction.userId', '=', userId),
+      )
+      .select([
+        'news.id as id',
+        'news.authors',
+        'news.url',
+        'news.media_name',
+        'news.num_of_likes',
+        'news.num_of_dislikes',
+        'news.published_at',
+        'news.title',
+        'news.images',
+        'news.clusterId',
+        'cluster.main_topic',
+        'news_reaction.type as reaction',
+      ])
+      .where(sql`news.media_name::text`, 'in', MisreadMedia)
+      .orderBy('news.published_at')
+      .offset(offset)
       .execute();
   }
 
@@ -1967,5 +2026,26 @@ export class NewsService {
       trueFalseNotGivenQuestions,
       misguidingTechniquesQuestions,
     };
+  }
+
+  async addUserReadSpecificNewsArticle({
+    userId,
+    newsId,
+  }: {
+    userId: string;
+    newsId: string;
+  }) {
+    await this.db
+      .insertInto('user_article_read')
+      .values({
+        userId: userId,
+        newsId: newsId,
+      })
+      .onConflict((oc) =>
+        oc
+          .columns(['userId', 'newsId']) // composite unique constraint
+          .doNothing(),
+      )
+      .execute();
   }
 }

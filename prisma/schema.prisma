@@ -240,6 +240,7 @@ model News {
   authorships     NewsAuthor[]
   num_of_likes    Int                    @default(0)
   num_of_dislikes Int                    @default(0)
+  misread_shared  Boolean                @default(false)
 
   userArticleReads UserArticleRead[]
 
@@ -1037,6 +1038,7 @@ enum MediaNameEnum {
   MyGoPenNews
   TFCNews
   FactcheckLab
+  TaroNews
 }
 
 enum OriginEnum {
@@ -1101,6 +1103,7 @@ enum OriginEnum {
   MyGoPenNews
   TFCNews
   FactcheckLab
+  TaroNews
 }
 
 enum MissionType {

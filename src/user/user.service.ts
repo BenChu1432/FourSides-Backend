@@ -590,6 +590,22 @@ export class UserService {
       .execute();
   }
 
+  async getNumOfBrains({ userId }: { userId: string }) {
+    return await this.db
+      .selectFrom('user')
+      .select('num_of_brains')
+      .where('id', '=', userId)
+      .executeTakeFirst();
+  }
+
+  async deductNumOfBrains({ userId }: { userId: string }) {
+    return await this.db
+      .updateTable('user')
+      .set((eb) => ({ num_of_brains: eb('num_of_brains', '-', 4) }))
+      .where('id', '=', userId)
+      .execute();
+  }
+
   async postStartAppSession({ userId }: { userId: string }) {
     return await this.db
       .insertInto('user_app_session')

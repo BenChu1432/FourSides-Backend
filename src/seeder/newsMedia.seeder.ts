@@ -169,6 +169,13 @@ export class NewsMediaSeeder {
         political_standing: 0.5,
       },
       {
+        name: 'TaroNews',
+        chinese_name: '芋傳媒',
+        imageUrl:
+          'https://scontent-tpe1-1.xx.fbcdn.net/v/t1.6435-9/28377891_181277129160229_342051676489777152_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=a5f93a&_nc_ohc=pbWK-_Qa3wsQ7kNvwH6sPx6&_nc_oc=AdlVI26xxIlghEpRPpxCoHzcBue_LyvVADvDNq6KRbED9bY4pDKFN75LccW_1UALEcE&_nc_zt=23&_nc_ht=scontent-tpe1-1.xx&_nc_gid=2zFoUpon75oA7PGG8rLvww&oh=00_AfZ2BNh_qdgvCdQt6agDjUtbkfknhJCX17YCu_j7vabEEA&oe=68FBDB42',
+        political_standing: 0.975,
+      },
+      {
         name: 'YahooNews',
         chinese_name: 'Yahoo奇摩新聞',
         imageUrl:

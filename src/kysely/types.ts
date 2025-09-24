@@ -424,7 +424,8 @@ export const MediaNameEnum = {
     FTV: "FTV",
     MyGoPenNews: "MyGoPenNews",
     TFCNews: "TFCNews",
-    FactcheckLab: "FactcheckLab"
+    FactcheckLab: "FactcheckLab",
+    TaroNews: "TaroNews"
 } as const;
 export type MediaNameEnum = (typeof MediaNameEnum)[keyof typeof MediaNameEnum];
 export const OriginEnum = {
@@ -488,7 +489,8 @@ export const OriginEnum = {
     FTV: "FTV",
     MyGoPenNews: "MyGoPenNews",
     TFCNews: "TFCNews",
-    FactcheckLab: "FactcheckLab"
+    FactcheckLab: "FactcheckLab",
+    TaroNews: "TaroNews"
 } as const;
 export type OriginEnum = (typeof OriginEnum)[keyof typeof OriginEnum];
 export const MissionType = {
@@ -625,6 +627,7 @@ export type News = {
     clusterId: string | null;
     num_of_likes: Generated<number>;
     num_of_dislikes: Generated<number>;
+    misread_shared: Generated<boolean>;
     places_in_concern: InterestingRegionOrCountry[];
     places_in_detail: unknown | null;
     copypaste_flag: Generated<boolean>;

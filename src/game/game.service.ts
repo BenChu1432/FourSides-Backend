@@ -81,6 +81,7 @@ export class GameService {
         'title.id as titleId',
       ])
       .where('user_title.userId', '=', userId)
+      .orderBy('user_title.createdAt', 'desc')
       .execute();
     return userTitleData;
   }
@@ -279,7 +280,6 @@ export class GameService {
   }
 
   // achivements
-
   async updateAchievementProgress({
     userId,
     achievementId,
@@ -301,13 +301,24 @@ export class GameService {
       )
       .returningAll()
       .executeTakeFirst();
-    const achievemnt = await this.db
+    const achievement = await this.db
       .selectFrom('user_achievement')
       .leftJoin(
         'achievement',
         'achievement.id',
         'user_achievement.achievementId',
       )
+      .select([
+        'achievement.id',
+        'achievement.name',
+        'achievement.bronze',
+        'achievement.silver',
+        'achievement.gold',
+        'achievement.diamond',
+        'achievement.platinum',
+        'user_achievement.cumulative_num',
+        'user_achievement.achievementId',
+      ])
       .selectAll()
       .where((eb) =>
         eb.and([
@@ -316,16 +327,19 @@ export class GameService {
         ]),
       )
       .executeTakeFirst();
+
     if (
-      achievemnt?.cumulative_num === achievemnt?.bronze &&
-      achievemnt?.cumulative_num === achievemnt?.silver &&
-      achievemnt?.cumulative_num === achievemnt?.gold &&
-      achievemnt?.cumulative_num === achievemnt?.diamond &&
-      achievemnt?.cumulative_num === achievemnt?.platinum
+      achievement?.cumulative_num === achievement?.bronze ||
+      achievement?.cumulative_num === achievement?.silver ||
+      achievement?.cumulative_num === achievement?.gold ||
+      achievement?.cumulative_num === achievement?.diamond ||
+      achievement?.cumulative_num === achievement?.platinum
     ) {
-      return true;
+      console.log('Unlocked achievement!');
+      return achievement;
     }
-    return false;
+    console.log('No achievement unlocked...');
+    return;
   }
 
   async updateLoginStreakAchievementProgress({

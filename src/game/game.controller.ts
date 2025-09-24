@@ -68,14 +68,17 @@ export class GameController {
     });
     console.log('result:', result);
     if (result) {
-      const achievementUnlocked =
+      const unlockedAchievement =
         await this.gameService.updateAchievementProgress({
           userId: payload.userId,
           achievementId: 5,
         });
-      return { achievementUnlocked, correct: result };
+      return {
+        unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
+        correct: result,
+      };
     }
-    return { achievementUnlocked: false, correct: result };
+    return { correct: result };
   }
 
   @UseGuards(AuthGuard)
@@ -95,12 +98,15 @@ export class GameController {
     });
     console.log('result:', result);
     if (result) {
-      const achievementUnlocked =
+      const unlockedAchievement =
         await this.gameService.updateAchievementProgress({
           userId: payload.userId,
           achievementId: 5,
         });
-      return { achievementUnlocked: achievementUnlocked, correct: result };
+      return {
+        unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
+        correct: result,
+      };
     }
   }
 

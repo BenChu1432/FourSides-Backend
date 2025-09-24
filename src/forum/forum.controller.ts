@@ -53,14 +53,14 @@ export class ForumController {
       userId: payload.userId,
       missionTitle: '💬 留言',
     });
-    const achievementUnlocked =
+    const unlockedAchievement =
       await this.gameService.updateAchievementProgress({
         userId: payload.userId,
         achievementId: 6,
       });
 
     return {
-      achievementUnlocked: achievementUnlocked,
+      unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
       ...result,
       unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
     };

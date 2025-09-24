@@ -26,3 +26,5 @@ export const identityToRegionMap: Record<
   連江人: ['連江縣'],
   其他: ['台灣'], // fallback
 };
+
+export const MisreadMedia = ['TFCNews', 'MyGoPenNews', 'FactcheckLab'];

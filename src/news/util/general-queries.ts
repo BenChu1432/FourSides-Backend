@@ -81,5 +81,6 @@ export function getClusters(db: Kysely<DB>, userId) {
       'cluster_vote_summary.oppose',
       'cluster_vote_summary.neutral',
       'free_user_to_unlocked_cluster.id',
-    ]);
+    ])
+    .having((eb) => eb.fn.count('news.id'), '>', 0);
 }

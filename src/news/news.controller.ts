@@ -26,6 +26,7 @@ import {
   GetTagBasedArticlesForAuthorDto,
   GetTagBasedArticlesForMediaDto,
   LikeArticleDto,
+  PostAddUserReadSpecificNewsArticleDto,
   PostCrossAnalysisRequestDto,
   SearchDto,
   UnlockClusterDto,
@@ -35,6 +36,7 @@ import { HttpService } from '@nestjs/axios';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { NotificationService } from 'src/notification/notification.service';
 import { GameService } from 'src/game/game.service';
+import { UserService } from 'src/user/user.service';
 
 const CROSS_ANALYSIS_SQS_URL = process.env.CROSS_ANALYSIS_SQS_URL;
 
@@ -43,6 +45,7 @@ export class NewsController {
   constructor(
     private readonly newsService: NewsService,
     private readonly gameService: GameService,
+    private readonly userService: UserService,
     private readonly notificationService: NotificationService,
   ) {}
 
@@ -107,6 +110,20 @@ export class NewsController {
   }
 
   @UseGuards(AuthGuard)
+  @Get('get-misread-news')
+  async getMisreadNews(
+    @Query('offset') offset: number = 0,
+    @Req() req: Request,
+  ) {
+    const payload: TokenPayload = req['user'];
+
+    return await this.newsService.getMisreadNews({
+      userId: payload.userId,
+      offset: Number(offset),
+    });
+  }
+
+  @UseGuards(AuthGuard)
   @Get('get-news/:clusterId')
   @UseInterceptors(TrimGetNewsResponseInterceptor)
   async getNews(@Param('clusterId') clusterId: string, @Req() req: Request) {
@@ -137,7 +154,7 @@ export class NewsController {
         userId: payload.userId,
         missionTitle: '🗳️ 投票',
       });
-      const achievementUnlocked =
+      const unlockedAchievement =
         await this.gameService.updateAchievementProgress({
           userId: payload.userId,
           achievementId: 4,
@@ -147,7 +164,7 @@ export class NewsController {
         type: 'NEWS_VOTE_TOTAL',
       });
       return {
-        achievementUnlocked: achievementUnlocked,
+        unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
         correct: result,
         unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
       };
@@ -217,6 +234,22 @@ export class NewsController {
   ) {
     const payload: TokenPayload = req['user'];
     const userId = payload.userId;
+    // check if the user has enough brains
+    const result = await this.userService.getNumOfBrains({
+      userId: userId,
+    });
+    console.log('result:', result);
+    const num_of_brains = result?.num_of_brains;
+    console.log('num_of_brains:', num_of_brains);
+    if (num_of_brains == undefined) {
+      throw new HttpException(
+        'num_of_brains is undefined',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    if (num_of_brains < 4) {
+      throw new HttpException('你沒有足夠的腦袋', HttpStatus.UNAUTHORIZED);
+    }
 
     // Avoid duplicate processing
     const { alreadyAnalysed, crossAnalysis } =
@@ -235,7 +268,7 @@ export class NewsController {
         publicUrl: crossAnalysis?.cross_analysis_url ?? '',
       });
       // deduct tokens
-      // ...
+      await this.userService.deductNumOfBrains({ userId: userId });
 
       console.log('crossAnalysis:', crossAnalysis);
       await this.notificationService.sendAndStoreNotification({
@@ -249,7 +282,7 @@ export class NewsController {
         userId: userId,
         missionTitle: '📊 使用跨文章分析功能',
       });
-      const achievementUnlocked =
+      const unlockedAchievement =
         await this.gameService.updateAchievementProgress({
           userId: userId,
           achievementId: 7,
@@ -259,10 +292,12 @@ export class NewsController {
         type: 'AI_ANALYSIS_TOTAL',
       });
       return {
-        achievementUnlocked,
+        unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
         unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
       };
     }
+    // deduct brains
+    await this.userService.deductNumOfBrains({ userId: userId });
 
     const sqs = new SQSClient({ region: 'ap-northeast-1' }); // or use process.env.AWS_REGION
 
@@ -279,7 +314,7 @@ export class NewsController {
     });
 
     // Make sure to check if the user has enough tokens before updating their progress!!!
-    const achievementUnlocked =
+    const unlockedAchievement =
       await this.gameService.updateAchievementProgress({
         userId: userId,
         achievementId: 7,
@@ -297,7 +332,7 @@ export class NewsController {
     );
 
     return {
-      unlockedAchievements: achievementUnlocked ? [achievementUnlocked] : [],
+      unlockedAchievements: unlockedAchievement ? [unlockedAchievement] : [],
       unlockedTitles: unlockedTitle ? [unlockedTitle] : [],
     };
   }
@@ -469,6 +504,19 @@ export class NewsController {
     const payload: TokenPayload = req['user'];
     return await this.gameService.updateAbandonDraft({
       userId: payload.userId,
+    });
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('/add-user-read-specific-news-article')
+  async addUserReadSpecificNewsArticle(
+    @Req() req: Request,
+    @Body() dto: PostAddUserReadSpecificNewsArticleDto,
+  ) {
+    const payload: TokenPayload = req['user'];
+    return await this.newsService.addUserReadSpecificNewsArticle({
+      userId: payload.userId,
+      newsId: dto.newsId,
     });
   }
 }

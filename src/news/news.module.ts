@@ -7,6 +7,7 @@ import { ForumService } from 'src/forum/forum.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { HttpModule } from '@nestjs/axios';
 import { GameService } from 'src/game/game.service';
+import { UserService } from 'src/user/user.service';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { GameService } from 'src/game/game.service';
   ],
   controllers: [NewsController],
   providers: [
+    UserService,
     NewsService,
     KyselyService,
     ForumService,
