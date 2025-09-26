@@ -1027,6 +1027,8 @@ enum MediaNameEnum {
   ChinaDailyNews
   SETN
   NextAppleNews
+  PChome
+  GVM
   MirrorMedia
   NowNews
   StormMedia
@@ -1092,6 +1094,8 @@ enum OriginEnum {
   ChinaDailyNews
   SETN
   NextAppleNews
+  PChome
+  GVM
   MirrorMedia
   NowNews
   StormMedia

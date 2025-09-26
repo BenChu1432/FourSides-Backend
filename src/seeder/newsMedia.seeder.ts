@@ -245,6 +245,19 @@ export class NewsMediaSeeder {
           'https://scontent-tpe1-1.xx.fbcdn.net/v/t39.30808-6/352782430_197593689454227_2182200236924088794_n.jpg?...',
         political_standing: 0.5,
       },
+      {
+        name: 'PChome',
+        chinese_name: 'PChome新聞',
+        imageUrl: 'https://news.pchome.com.tw/img/pchome_news_fb.jpg',
+        political_standing: 0.45,
+      },
+      {
+        name: 'GVM',
+        chinese_name: '遠見',
+        imageUrl:
+          'https://upload.wikimedia.org/wikipedia/zh/thumb/a/a1/Global_Views_Monthly.svg/2560px-Global_Views_Monthly.svg.png',
+        political_standing: 0.65,
+      },
     ];
 
     for (const outlet of newsMedia) {
